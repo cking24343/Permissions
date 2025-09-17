@@ -1,4 +1,4 @@
-package com.permissions.dialogs
+package com.permissions.dialogs.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

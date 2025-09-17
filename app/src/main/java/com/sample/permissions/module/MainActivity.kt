@@ -2,36 +2,29 @@ package com.sample.permissions.module
 
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.Snackbar
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.lifecycle.lifecycleScope
 import com.permissions.api.PermissionsManager
-import com.permissions.dialogs.DialogService
-import com.permissions.dialogs.PermissionsDialogHost
+import com.permissions.dialogs.PermissionRequestService
+import com.permissions.dialogs.ui.PermissionRequestHost
 import com.permissions.models.PermissionResult
-import com.sample.permissions.module.ui.models.MainScreenState
 import com.sample.permissions.module.ui.screens.MainScreen
 import com.sample.permissions.module.ui.theme.SamplePermissionsModuleTheme
-import com.sample.permissions.module.ui.widgets.Greeting
-import com.sample.permissions.module.utils.buildPermissionsDialogOverrides
+import com.sample.permissions.module.utils.buildPermissionsRequestUiOverrides
 import com.sample.permissions.module.utils.launchWhenCreated
-import com.sample.permissions.module.utils.launchWhenStarted
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
+import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
     // DI
@@ -41,11 +34,12 @@ class MainActivity : ComponentActivity() {
     init {
         launchWhenCreated {
             activityViewModel.requestLocationAndBluetooth.collectLatest {
-                permissionsManager.requestFindMyWayPermissionsFlow(
+                permissionsManager.requestCombinedLocationAndBluetoothPermissionsFlow(
                     onResult = { type ->
-                        Log.d(
-                            "PermissionsManager",
-                            "MainActivity | Request FindMyWay Permissions Flow completed, result: $type"
+                        Timber.tag("PermissionsManager")
+                            .d("MainActivity | Request Combined Permissions Flow completed, result: $type")
+                        permissionsToast(
+                            "Combined Permissions Flow completed, result: $type"
                         )
                     }
                 )
@@ -55,9 +49,10 @@ class MainActivity : ComponentActivity() {
             activityViewModel.requestLocation.collectLatest {
                 permissionsManager.requestLocationFlow(
                     onResult = { type ->
-                        Log.d(
-                            "PermissionsManager",
-                            "MainActivity | Request Location Permission Flow completed, result: $type"
+                        Timber.tag("PermissionsManager")
+                            .d("MainActivity | Request Location Permission Flow completed, result: $type")
+                        permissionsToast(
+                            "Location Permissions Flow completed, result: $type"
                         )
                         when (type) {
                             PermissionResult.Granted -> {
@@ -93,9 +88,10 @@ class MainActivity : ComponentActivity() {
             activityViewModel.requestBluetooth.collectLatest {
                 permissionsManager.requestBluetoothFlow(
                     onResult = { type ->
-                        Log.d(
-                            "PermissionsManager",
-                            "MainActivity | Request Bluetooth Permission Flow completed, result: $type"
+                        Timber.tag("PermissionsManager")
+                            .d("MainActivity | Request Bluetooth Permission Flow completed, result: $type")
+                        permissionsToast(
+                            "Bluetooth Permissions Flow completed, result: $type"
                         )
                         when (type) {
                             PermissionResult.Granted -> {
@@ -126,9 +122,10 @@ class MainActivity : ComponentActivity() {
             activityViewModel.requestNotifications.collectLatest {
                 permissionsManager.requestNotificationFlow(
                     onResult = { type ->
-                        Log.d(
-                            "PermissionsManager",
-                            "MainActivity | Request Notification Permission Flow completed, result: $type"
+                        Timber.tag("PermissionsManager")
+                            .d("MainActivity | Request Notification Permission Flow completed, result: $type")
+                        permissionsToast(
+                            "Notification Permissions Flow completed, result: $type"
                         )
                         when (type) {
                             PermissionResult.Granted -> {
@@ -155,9 +152,10 @@ class MainActivity : ComponentActivity() {
             activityViewModel.requestCamera.collectLatest {
                 permissionsManager.requestCameraFlow(
                     onResult = { type ->
-                        Log.d(
-                            "PermissionsManager",
-                            "MainActivity | Request Camera Permission Flow completed, result: $type"
+                        Timber.tag("PermissionsManager")
+                            .d("MainActivity | Request Camera Permission Flow completed, result: $type")
+                        permissionsToast(
+                            "Camera Permissions Flow completed, result: $type"
                         )
                         when (type) {
                             PermissionResult.Granted -> {
@@ -190,24 +188,28 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             // Get the Koin instance for the permissions dialog service
-            val dialogService: DialogService = get()
+            val permissionRequestService: PermissionRequestService = get()
 
             // Pass in overrides for app specific dialogs to replace permission module ones
-            val dialogOverrides = remember { buildPermissionsDialogOverrides() }
+            val uiOverrides = remember { buildPermissionsRequestUiOverrides() }
 
             SamplePermissionsModuleTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    // Screen Container
-                    MainScreen(
-                        state = activityViewModel.toState(),
-                        modifier = Modifier.padding(innerPadding),
-                    )
+                    // Using a box to ensure layering of permission request ui to be the top z-index
+                    Box(modifier = Modifier.fillMaxSize()) {
 
-                    // Host permission dialogs
-                    PermissionsDialogHost(
-                        service = dialogService,
-                        registry = dialogOverrides,
-                    )
+                        // Screen Container
+                        MainScreen(
+                            state = activityViewModel.toState(),
+                            modifier = Modifier.padding(innerPadding),
+                        )
+
+                        // Host permission dialogs
+                        PermissionRequestHost(
+                            service = permissionRequestService,
+                            registry = uiOverrides,
+                        )
+                    }
                 }
             }
         }
@@ -216,6 +218,10 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         permissionsManager.detachActivity()
         super.onDestroy()
+    }
+
+    private fun permissionsToast(message: String) {
+        Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
     }
 
 }

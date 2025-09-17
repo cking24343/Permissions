@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +25,7 @@ fun MainScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .fillMaxSize()
-            .padding(8.dp)
+            .padding(16.dp)
     ) {
 
         Greeting(
@@ -71,9 +69,9 @@ fun MainScreen(
         )
 
         PermissionsButton(
-            text = "Check FindMyWay permissions",
+            text = "Check Combined Location and Bluetooth permissions",
             onClick = {
-                state.onEvent(PermissionsUiEvent.OnFindMyWayRequest)
+                state.onEvent(PermissionsUiEvent.OnLocationAndBluetoothRequest)
             }
         )
 

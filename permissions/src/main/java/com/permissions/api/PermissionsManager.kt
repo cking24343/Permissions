@@ -19,7 +19,7 @@ interface PermissionsManager {
         onResult: (PermissionResult) -> Unit
     )
 
-    fun requestFindMyWayPermissionsFlow(
+    fun requestCombinedLocationAndBluetoothPermissionsFlow(
         onResult: (PermissionResult) -> Unit
     )
 
