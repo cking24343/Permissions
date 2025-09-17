@@ -1,5 +1,6 @@
-package com.permissions.dialogs
+package com.permissions.dialogs.utils
 
+import com.permissions.dialogs.model.DialogTags
 import com.permissions.models.PermissionType
 
 fun PermissionType.toDialogTag(): DialogTags = when (this) {

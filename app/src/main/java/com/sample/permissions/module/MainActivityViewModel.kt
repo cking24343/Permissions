@@ -1,9 +1,7 @@
 package com.sample.permissions.module
 
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import com.permissions.api.PermissionsManager
 import com.sample.permissions.module.ui.events.PermissionsUiEvent
 import com.sample.permissions.module.ui.models.MainScreenState
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -78,7 +76,7 @@ class MainActivityViewModel : BaseViewModel() {
                 onUserWantsToEnableCamera()
             }
 
-            is PermissionsUiEvent.OnFindMyWayRequest -> {
+            is PermissionsUiEvent.OnLocationAndBluetoothRequest -> {
                 onUserWantsToEnableLocationAndBluetooth()
             }
         }

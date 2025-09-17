@@ -1,4 +1,4 @@
-package com.permissions.dialogs
+package com.permissions.dialogs.ui
 
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -10,21 +10,27 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.DialogProperties
+import com.permissions.dialogs.model.ConfirmDialogSpec
+import com.permissions.dialogs.model.CustomSpec
+import com.permissions.dialogs.PermissionRendererRegistry
+import com.permissions.dialogs.model.UiRequestResult
+import com.permissions.dialogs.PermissionRequestService
+import com.permissions.dialogs.model.UiRequestSpec
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
-fun PermissionsDialogHost(
-    service: DialogService,
-    registry: DialogRendererRegistry = DialogRendererRegistry(),
+fun PermissionRequestHost(
+    service: PermissionRequestService,
+    registry: PermissionRendererRegistry = PermissionRendererRegistry(),
 ) {
-    var current by remember { mutableStateOf<DialogSpec?>(null) }
+    var current by remember { mutableStateOf<UiRequestSpec?>(null) }
 
     LaunchedEffect(Unit) {
         service.requests.collectLatest { current = it }
     }
 
     current?.let { spec ->
-        val complete: (DialogResult) -> Unit = { res ->
+        val complete: (UiRequestResult) -> Unit = { res ->
             if (!spec.result.isCompleted) {
                 spec.result.complete(res)
             }
@@ -41,14 +47,14 @@ fun PermissionsDialogHost(
 
         // 2) Module defaults (fallbacks)
         when (spec) {
-            is ConfirmSpec -> {
+            is ConfirmDialogSpec -> {
                 AlertDialog(
-                    onDismissRequest = { complete(DialogResult.Dismissed); current = null },
+                    onDismissRequest = { complete(UiRequestResult.Dismissed); current = null },
                     title = { Text(spec.title) },
                     text = { Text(spec.message) },
                     confirmButton = {
                         TextButton(onClick = {
-                            complete(DialogResult.Confirmed);
+                            complete(UiRequestResult.Confirmed);
                             current = null
                         }) {
                             Text(spec.positiveText)
@@ -56,7 +62,7 @@ fun PermissionsDialogHost(
                     },
                     dismissButton = {
                         TextButton(onClick = {
-                            complete(DialogResult.Dismissed);
+                            complete(UiRequestResult.Dismissed);
                             current = null
                         }) {
                             Text(spec.negativeText)
@@ -82,11 +88,11 @@ fun PermissionsDialogHost(
                     primaryImageRes = spec.primaryImageRes,
                     secondaryImageRes = spec.secondaryImageRes,
                     onConfirm = {
-                        complete(DialogResult.Confirmed);
+                        complete(UiRequestResult.Confirmed);
                         current = null
                     },
                     onDismiss = {
-                        complete(DialogResult.Dismissed);
+                        complete(UiRequestResult.Dismissed);
                         current = null
                     },
                 )

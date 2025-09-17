@@ -19,12 +19,11 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.permissions.dialogs.ConfirmSpec
-import com.permissions.dialogs.CustomSpec
-import com.permissions.dialogs.DialogResult
-import com.permissions.dialogs.DialogService
-import com.permissions.dialogs.DialogTags
-import com.permissions.dialogs.toDialogTag
+import com.permissions.dialogs.model.CustomSpec
+import com.permissions.dialogs.model.UiRequestResult
+import com.permissions.dialogs.PermissionRequestService
+import com.permissions.dialogs.model.DialogTags
+import com.permissions.dialogs.utils.toDialogTag
 import com.permissions.models.PermissionResult
 import com.permissions.models.PermissionState
 import com.permissions.models.PermissionType
@@ -40,7 +39,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
     // DI
     private val appContext: Context by lazy { PermissionsInitializer.getAppContext() }
     private val permissionStore: PermissionStore by inject()
-    private val dialogs: DialogService by inject()
+    private val dialogs: PermissionRequestService by inject()
 
     private var activity: ComponentActivity? = null
 
@@ -91,6 +90,9 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
     private fun isBluetoothServiceEnabled(): Boolean {
         return bluetoothAdapter?.isEnabled == true
     }
+
+    private fun isBluetoothEnableByDefault() =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S
 
     private val isNotificationsEnabled: Boolean
         get() = NotificationManagerCompat.from(appContext).areNotificationsEnabled()
@@ -202,8 +204,16 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 return@launchMain
             }
 
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                grantPermissionByDefault(type, onResult)
+            if (isBluetoothEnableByDefault()) {
+                if (isBluetoothServiceEnabled()) {
+                    grantPermissionByDefault(type, onResult)
+                } else {
+                    // surface the "turn on Bluetooth" rationale
+                    permissionStore.setState(type, PermissionState.ServiceDisabled)
+                    showBluetoothServiceRationale {
+                        onResult(PermissionResult.ServiceDisabled)
+                    }
+                }
                 return@launchMain
             }
 
@@ -592,16 +602,16 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
         }
     }
 
-    override fun requestFindMyWayPermissionsFlow(
-        onComplete: (PermissionResult) -> Unit
+    override fun requestCombinedLocationAndBluetoothPermissionsFlow(
+        onResult: (PermissionResult) -> Unit
     ) {
         requestLocationFlow { locationResult ->
             if (locationResult == PermissionResult.Granted) {
                 requestBluetoothFlow { bluetoothResult ->
-                    onComplete(bluetoothResult)
+                    onResult(bluetoothResult)
                 }
             } else {
-                onComplete(locationResult)
+                onResult(locationResult)
             }
         }
     }
@@ -626,8 +636,8 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
      * before requesting a permission from the user.
      * */
     private fun shouldShowRationale(permission: String): Boolean {
-        return activity?.let {
-            ActivityCompat.shouldShowRequestPermissionRationale(it, permission)
+        return activity?.let { context ->
+            shouldShowRequestPermissionRationale(context, permission)
         } ?: false
     }
 
@@ -662,8 +672,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
 
         val shouldShowCustomRationale = !hasShownRationale && !isGranted
 
-        val shouldShowRationale =
-            ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
+        val shouldShowRationale = shouldShowRequestPermissionRationale(activity, permission)
 
         if (shouldShowCustomRationale || shouldShowRationale) {
             launchMain {
@@ -751,7 +760,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 tag = dialogTag.tag
             )
         )
-        if (res == DialogResult.Confirmed) {
+        if (res == UiRequestResult.Confirmed) {
             onAccept()
         } else {
             onCancel()
@@ -768,7 +777,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 tag = DialogTags.RATIONALE_BLUETOOTH_SERVICES.tag
             )
         )
-        if (res == DialogResult.Confirmed) {
+        if (res == UiRequestResult.Confirmed) {
             navigateToBluetoothSettings()
         } else {
             onDismiss()
@@ -785,29 +794,12 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 tag = DialogTags.RATIONALE_LOCATION_SERVICES.tag
             )
         )
-        if (res == DialogResult.Confirmed) {
+        if (res == UiRequestResult.Confirmed) {
             navigateToLocationSettings()
         } else {
             onDismiss()
         }
     }
-
-    /* private fun showNavigateToSettingsDialog(
-         title: String,
-         message: String,
-         onDismiss: () -> Unit = {},
-     ) {
-         activity?.let {
-             android.app.AlertDialog.Builder(it)
-                 .setTitle(title)
-                 .setMessage(message)
-                 .setPositiveButton("Go to Settings") { _, _ ->
-                     navigateToAppSettings()
-                 }
-                 .setNegativeButton("Cancel", null)
-                 .show()
-         } ?: onDismiss()
-     }*/
 
     private fun showNavigateToSettingsDialog(
         title: String,
@@ -824,28 +816,12 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 tag = DialogTags.RATIONALE_APP_SETTINGS.tag,
             )
         )
-        if (res == DialogResult.Confirmed) {
+        if (res == UiRequestResult.Confirmed) {
             navigateToAppSettings()
         } else {
             onDismiss()
         }
     }
-
-    /*
-    private fun showPreciseLocationRationale(
-        onAccepted: () -> Unit = {},
-        onDismissed: () -> Unit = {}
-    ) {
-        activity?.let {
-            android.app.AlertDialog.Builder(it)
-                .setTitle("Enable Precise Location")
-                .setMessage("You've allowed location access, but only approximate. For turn-by-turn navigation, we need precise location.")
-                .setPositiveButton("Enable Precise") { _, _ -> onAccepted() }
-                .setNegativeButton("Not Now") { _, _ -> onDismissed() }
-                .show()
-        } ?: onDismissed()
-    }
-    */
 
     private fun showPreciseLocationRationale(
         onAccepted: () -> Unit = {},
@@ -861,29 +837,16 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 tag = DialogTags.RATIONALE_PRECISE_LOCATION.tag,
             )
         )
-        if (res == DialogResult.Confirmed) {
+        if (res == UiRequestResult.Confirmed) {
             onAccepted()
         } else {
             onDismissed()
         }
     }
 
-    /*
-    private fun showStandardLocationRationale(onAccept: () -> Unit) {
-        activity?.let {
-            android.app.AlertDialog.Builder(it)
-                .setTitle("Location Access Needed")
-                .setMessage("We use your location to show relevant information near you.")
-                .setPositiveButton("Continue") { _, _ -> onAccept() }
-                .setNegativeButton("Cancel", null)
-                .show()
-        }
-    }
-    */
-
     private fun showStandardLocationRationale(
         onAccept: () -> Unit,
-        ) = launchMain {
+    ) = launchMain {
         val res = dialogs.request(
             CustomSpec(
                 title = "Location Access Needed",
@@ -894,25 +857,10 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 tag = DialogTags.RATIONALE_LOCATION.tag,
             )
         )
-        if (res == DialogResult.Confirmed) {
+        if (res == UiRequestResult.Confirmed) {
             onAccept()
         }
     }
-
-    /*
-    private fun showBackgroundLocationRationale(
-        message: String = "This app needs background location access to notify you when you are near specific locations.",
-        onContinue: () -> Unit,
-        onCancel: () -> Unit
-    ) {
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("Background Location Access")
-            .setMessage(message)
-            .setPositiveButton("Continue") { _, _ -> onContinue() }
-            .setNegativeButton("Cancel") { _, _ -> onCancel() }
-            .show()
-    }
-    */
 
     private fun showBackgroundLocationRationale(
         message: String = "This app needs background location access to notify you when you are near specific locations.",
@@ -929,7 +877,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 tag = DialogTags.RATIONALE_BACKGROUND_LOCATION.tag,
             )
         )
-        if (res == DialogResult.Confirmed) {
+        if (res == UiRequestResult.Confirmed) {
             onContinue()
         } else {
             onCancel()
@@ -957,11 +905,10 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
 
     private fun navigateToBluetoothSettings() {
         activity?.let {
-
             if (ActivityCompat.checkSelfPermission(
                     it,
                     Manifest.permission.BLUETOOTH_CONNECT
-                ) == PackageManager.PERMISSION_GRANTED
+                ) == PackageManager.PERMISSION_GRANTED || isBluetoothEnableByDefault()
             ) {
                 val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
                 it.startActivity(intent)
@@ -970,7 +917,8 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
     }
 }
 
-/*fun PermissionResult.toPermissionState(): PermissionState = when (this) {
+/*
+fun PermissionResult.toPermissionState(): PermissionState = when (this) {
     PermissionResult.Granted -> PermissionState.Granted
     PermissionResult.Denied -> PermissionState.Denied
     PermissionResult.Canceled -> PermissionState.Canceled
@@ -979,31 +927,5 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
 
     PermissionResult.NeedsPreciseUpgrade -> PermissionState.PreciseRationaleShown
     PermissionResult.NeedsManualPreciseGrant -> PermissionState.ManualUpgradeRequested
-}*/
-
-
-/** Example Compose call
- *
- * WellstarDialog(
- *             onDismissRequest = {
- *                 // treat outside tap/back as dismiss -> clear dialog state
- *                 state.onEvent(WayfindingGozioNavUiEvent.OnExit)
- *             },
- *             bodyContent = {
- *                 DialogContent(
- *                     primaryImage = R.drawable.parking_active_image,
- *                     title = R.string.wayfinding_parking_leaving_title,
- *                     message = R.string.wayfinding_parking_clear_message,
- *                     positiveString = R.string.wayfinding_positive_confirm_clear_parking,
- *                     positiveButtonClick = {
- *                         state.onEvent(WayfindingGozioNavUiEvent.OnClearParking)
- *                     },
- *                     negativeString = R.string.wayfinding_parking_negative,
- *                     negativeButtonClick = {
- *                         state.onEvent(WayfindingGozioNavUiEvent.OnExit)
- *                     },
- *                 )
- *             }
- *         )
- *
- * */
+}
+*/

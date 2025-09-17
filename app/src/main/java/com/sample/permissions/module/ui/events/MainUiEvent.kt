@@ -6,5 +6,5 @@ sealed interface PermissionsUiEvent {
     data object OnBluetoothRequest : PermissionsUiEvent
     data object OnNotificationRequest : PermissionsUiEvent
     data object OnCameraRequest : PermissionsUiEvent
-    data object OnFindMyWayRequest : PermissionsUiEvent
+    data object OnLocationAndBluetoothRequest : PermissionsUiEvent
 }
