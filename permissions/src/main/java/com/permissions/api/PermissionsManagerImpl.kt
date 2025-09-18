@@ -27,6 +27,7 @@ import com.permissions.dialogs.utils.toDialogTag
 import com.permissions.models.PermissionResult
 import com.permissions.enums.PermissionState
 import com.permissions.enums.PermissionType
+import com.permissions.enums.PermissionUiMode
 import com.permissions.store.PermissionStore
 import com.permissions.util.PermissionsInitializer
 import kotlinx.coroutines.CoroutineScope
@@ -178,6 +179,16 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
 
     // Permission Flows
     override fun requestCameraFlow(onResult: (PermissionResult) -> Unit) {
+        requestCameraFlow(
+            uiMode = PermissionUiMode.Normal,
+            onResult = onResult,
+        )
+    }
+
+    override fun requestCameraFlow(
+        uiMode: PermissionUiMode,
+        onResult: (PermissionResult) -> Unit,
+    ) {
         launchMain {
             val type = PermissionType.Camera
             if (isCameraAvailable) {
@@ -186,7 +197,8 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                     permission = Manifest.permission.CAMERA,
                     rationaleMessage = "This feature requires access to your camera.",
                     launcher = cameraLauncher,
-                    onResult = onResult
+                    uiMode = uiMode,
+                    onResult = onResult,
                 )
             } else {
                 permissionStore.setState(type, PermissionState.NotRequested)
@@ -196,6 +208,16 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
     }
 
     override fun requestBluetoothFlow(onResult: (PermissionResult) -> Unit) {
+        requestBluetoothFlow(
+            uiMode = PermissionUiMode.Normal,
+            onResult = onResult
+        )
+    }
+
+    override fun requestBluetoothFlow(
+        uiMode: PermissionUiMode,
+        onResult: (PermissionResult) -> Unit,
+    ) {
         launchMain {
             val type = PermissionType.Bluetooth
             if (!isBluetoothAvailable) {
@@ -210,22 +232,36 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 } else {
                     // surface the "turn on Bluetooth" rationale
                     permissionStore.setState(type, PermissionState.ServiceDisabled)
-                    showBluetoothServiceRationale {
+                    if (uiMode == PermissionUiMode.NoRationales) {
+                        // headless: don't show UI, just report disabled
                         onResult(PermissionResult.ServiceDisabled)
+                    } else {
+                        showBluetoothServiceRationale {
+                            onResult(PermissionResult.ServiceDisabled)
+                        }
                     }
                 }
                 return@launchMain
             }
 
+            // S+ : need to request runtime permission
             handlePermissionRequest(
                 type = type,
                 permission = Manifest.permission.BLUETOOTH_CONNECT,
                 rationaleMessage = "This feature requires access to BLE beacons via Bluetooth.",
                 launcher = bluetoothLauncher,
+                uiMode = uiMode,
                 onResult = { result ->
                     if (result == PermissionResult.Granted && !isBluetoothServiceEnabled()) {
-                        showBluetoothServiceRationale {
+                        launchMain {
+                            permissionStore.setState(type, PermissionState.ServiceDisabled)
+                        }
+                        if (uiMode == PermissionUiMode.NoRationales) {
                             onResult(PermissionResult.ServiceDisabled)
+                        } else {
+                            showBluetoothServiceRationale {
+                                onResult(PermissionResult.ServiceDisabled)
+                            }
                         }
                     } else {
                         onResult(result)
@@ -236,6 +272,16 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
     }
 
     override fun requestNotificationFlow(onResult: (PermissionResult) -> Unit) {
+        requestNotificationFlow(
+            uiMode = PermissionUiMode.Normal,
+            onResult = onResult,
+        )
+    }
+
+    override fun requestNotificationFlow(
+        uiMode: PermissionUiMode,
+        onResult: (PermissionResult) -> Unit,
+    ) {
         launchMain {
             val type = PermissionType.Notification
             if (isNotificationsEnabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
@@ -248,12 +294,19 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 permission = Manifest.permission.POST_NOTIFICATIONS,
                 rationaleMessage = "This app needs permission to send you notifications.",
                 launcher = notificationLauncher,
-                onResult = onResult
+                uiMode = uiMode,
+                onResult = onResult,
             )
         }
     }
 
     override fun requestBackgroundLocationPermission() {
+        requestBackgroundLocationPermission(PermissionUiMode.Normal)
+    }
+
+    override fun requestBackgroundLocationPermission(
+        uiMode: PermissionUiMode,
+    ) {
         launchMain {
             val type = PermissionType.BackgroundLocation
             if (isBackgroundLocationAccessGranted) {
@@ -262,6 +315,14 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
             }
 
             permissionStore.setState(type, PermissionState.RationaleShown)
+
+            if (uiMode == PermissionUiMode.NoRationales) {
+                // Headless: don't show UI. Either navigate silently or report a state.
+                // Simplest: tell caller it's effectively "needs manual grant".
+                permissionStore.setState(type, PermissionState.ManualUpgradeRequested)
+                return@launchMain
+            }
+
             showBackgroundLocationRationale(
                 onContinue = {
                     navigateToAppSettings()
@@ -277,6 +338,16 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
 
     // WIP: Location permissions + use cases are still being ironed out
     override fun requestLocationFlow(
+        onResult: (PermissionResult) -> Unit
+    ) {
+        requestLocationFlow(
+            uiMode = PermissionUiMode.Normal,
+            onResult = onResult,
+        )
+    }
+
+    override fun requestLocationFlow(
+        uiMode: PermissionUiMode,
         onResult: (PermissionResult) -> Unit
     ) {
         val type = PermissionType.Location
@@ -303,8 +374,12 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 } else {
                     trackLocationFlow("Precise location granted (ie: Fine Access), but location services not enabled. Prompting now...")
                     updatePermissionState(type, PermissionState.ServiceDisabled)
-                    showLocationServiceRationale {
+                    if (uiMode == PermissionUiMode.NoRationales) {
                         onResult(PermissionResult.ServiceDisabled)
+                    } else {
+                        showLocationServiceRationale {
+                            onResult(PermissionResult.ServiceDisabled)
+                        }
                     }
                 }
             }
@@ -401,75 +476,107 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                         )*/
                         if (currentPermissionState == PermissionState.PreciseDeniedPermanently) {
                             trackLocationFlow("Precise access is permanently denied — redirecting to app settings.")
-                            //navigateToAppSettings()
-                            showNavigateToSettingsDialog(
-                                title = "Enable Precise Location",
-                                message = "To enable precise location, toggle it on from the app's permission settings."
-                            )
+                            if (uiMode == PermissionUiMode.NoRationales) {
+                                onResult(PermissionResult.PreciseDeniedPermanently)
+                            } else {
+                                //navigateToAppSettings()
+                                showNavigateToSettingsDialog(
+                                    title = "Enable Precise Location",
+                                    message = "To enable precise location, toggle it on from the app's permission settings."
+                                )
+                            }
                         } else {
-                            showPreciseLocationRationale(
-                                onAccepted = {
-                                    trackLocationFlow("User accepted precise rationale.")
-                                    launchMain {
-                                        val currentPermissionState = permissionStore.getState(type)
-                                        if (currentPermissionState == PermissionState.PreciseDeniedPermanently) {
-                                            trackLocationFlow("Precise access is permanently denied — redirecting to app settings.")
-                                            navigateToAppSettings()
+                            val promptSystemForPrecise = {
+                                launchMain {
+                                    val currentPermissionState = permissionStore.getState(type)
+
+                                    if (currentPermissionState == PermissionState.PreciseDeniedPermanently) {
+                                        trackLocationFlow("Precise access is permanently denied — redirecting to app settings.")
+                                        if (uiMode == PermissionUiMode.NoRationales) {
+                                            onResult(PermissionResult.PreciseDeniedPermanently)
                                         } else {
-                                            // Launch system permission request for precise access
-                                            trackLocationFlow("Requesting precise location via system prompt.")
-                                            onResultCallback = { granted ->
-                                                val newState = if (granted) {
-                                                    PermissionState.PreciseGranted
+                                            navigateToAppSettings()
+                                        }
+                                    } else {
+                                        // Launch system permission request for precise access
+                                        trackLocationFlow("Requesting precise location via system prompt.")
+                                        onResultCallback = { granted ->
+                                            val newState = if (granted) {
+                                                PermissionState.PreciseGranted
+                                            } else {
+                                                hasUserRejectedPrecise = true
+                                                PermissionState.PreciseDeniedPermanently
+                                            }
+
+                                            updatePermissionState(type, newState)
+
+                                            if (granted && !isLocationServiceEnabled()) {
+                                                if (uiMode == PermissionUiMode.NoRationales) {
+                                                    onResult(PermissionResult.ServiceDisabled)
                                                 } else {
-                                                    hasUserRejectedPrecise = true
-                                                    PermissionState.PreciseDeniedPermanently
-                                                }
-
-                                                updatePermissionState(type, newState)
-
-                                                if (granted && !isLocationServiceEnabled()) {
                                                     showLocationServiceRationale {
                                                         onResult(PermissionResult.ServiceDisabled)
                                                     }
-                                                } else {
-                                                    onResult(
-                                                        if (granted) PermissionResult.Granted
-                                                        else PermissionResult.Denied
-                                                    )
                                                 }
+                                            } else {
+                                                onResult(
+                                                    if (granted) {
+                                                        PermissionResult.Granted
+                                                    } else {
+                                                        PermissionResult.Denied
+                                                    }
+                                                )
                                             }
-
-                                            locationLauncher?.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                                         }
+
+                                        locationLauncher?.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                                     }
-                                },
-                                onDismissed = {
-                                    hasUserRejectedPrecise = true
-                                    updatePermissionState(
-                                        type,
-                                        PermissionState.PreciseDeniedPermanently
-                                    )
-                                    onResult(PermissionResult.Denied)
                                 }
-                            )
+                            }
+
+                            if (uiMode == PermissionUiMode.NoRationales) {
+                                promptSystemForPrecise()
+                            } else {
+                                showPreciseLocationRationale(
+                                    onAccepted = {
+                                        trackLocationFlow("User accepted precise rationale.")
+                                        promptSystemForPrecise()
+                                    },
+                                    onDismissed = {
+                                        hasUserRejectedPrecise = true
+                                        updatePermissionState(
+                                            type,
+                                            PermissionState.PreciseDeniedPermanently
+                                        )
+                                        onResult(PermissionResult.PreciseDeniedPermanently)
+                                    }
+                                )
+                            }
                         }
 
                     } else {
                         if (hasUserRejectedPrecise) {
                             trackLocationFlow("User previously rejected precise. Directing to settings.")
-                            showNavigateToSettingsDialog(
-                                title = "Enable Precise Location",
-                                message = "You've opted to keep Approximate only. Please enable 'Use precise location' from the location permission section, under the app's settings."
-                            )
+                            if (uiMode == PermissionUiMode.NoRationales) {
+                                onResult(PermissionResult.PreciseDeniedPermanently)
+                            } else {
+                                showNavigateToSettingsDialog(
+                                    title = "Enable Precise Location",
+                                    message = "You've opted to keep Approximate only. Please enable 'Use precise location' from the location permission section, under the app's settings."
+                                )
+                            }
                         } else {
                             trackLocationFlow("No system dialog available for precise. Marking as rejected and opening settings.")
                             hasUserRejectedPrecise = true
                             updatePermissionState(type, PermissionState.PreciseDenied)
-                            showNavigateToSettingsDialog(
-                                title = "Enable Precise Location",
-                                message = "To enable precise location, please enable 'Use precise location' from the location permission section, under the app's settings."
-                            )
+                            if (uiMode == PermissionUiMode.NoRationales) {
+                                onResult(PermissionResult.Denied)
+                            } else {
+                                showNavigateToSettingsDialog(
+                                    title = "Enable Precise Location",
+                                    message = "To enable precise location, please enable 'Use precise location' from the location permission section, under the app's settings."
+                                )
+                            }
                         }
                     }
                 }
@@ -478,109 +585,131 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
             else -> {
                 // User does note have any permissions for Location
                 trackLocationFlow("No location access has been granted (ie, Neither Fine nor Coarse Access)")
+
                 launchMain {
                     val currentPermissionState = permissionStore.getState(type)
+
                     trackLocationFlow("Current Permission State: $currentPermissionState")
+
                     // Check to see if we can request fine access or if we have yet to request (ie, NotRequested will be returned if there is not value in the datastore)
                     if (shouldShowRationale(Manifest.permission.ACCESS_FINE_LOCATION) ||
                         currentPermissionState == PermissionState.NotRequested
                     ) {
                         trackLocationFlow("Showing rationale for location access")
                         permissionStore.setState(type, PermissionState.RationaleShown)
-                        showRationaleDialog(
-                            title = "Location Access Needed",
-                            message = "We use your location to show relevant information near you.",
-                            dialogTag = type.toDialogTag(),
-                            onAccept = { specId ->
-                                launchMain {
-                                    /*handlePermissionRequest(
-                                        type = type,
-                                        permission = Manifest.permission.ACCESS_FINE_LOCATION,
-                                        rationaleMessage = "We use your location to show relevant information near you.",
-                                        launcher = locationLauncher,
-                                        onResult = { result ->
-                                            // Re-check permissions after system prompt
-                                            if (hasFineLocation) {
-                                                if (isLocationServiceEnabled()) {
-                                                    updatePermissionState(
-                                                        type,
-                                                        PermissionState.PreciseGranted
-                                                    )
-                                                    onResult(PermissionResult.Granted)
-                                                } else {
-                                                    updatePermissionState(
-                                                        type,
-                                                        PermissionState.ServiceDisabled
-                                                    )
-                                                    showLocationServiceRationale {
-                                                        onResult(PermissionResult.ServiceDisabled)
-                                                    }
-                                                }
-                                            } else if (hasCoarseLocation) {
-                                                // Fall into the follow-up check for precise
-                                                requestLocationFlow(onResult)
-                                            } else {
-                                                onResult(result)
+
+                        val promptSystemForLocation: (String?) -> Unit = { specId ->
+                            launchMain {
+                                /*handlePermissionRequest(
+                                type = type,
+                                permission = Manifest.permission.ACCESS_FINE_LOCATION,
+                                rationaleMessage = "We use your location to show relevant information near you.",
+                                launcher = locationLauncher,
+                                onResult = { result ->
+                                    // Re-check permissions after system prompt
+                                    if (hasFineLocation) {
+                                        if (isLocationServiceEnabled()) {
+                                            updatePermissionState(
+                                                type,
+                                                PermissionState.PreciseGranted
+                                            )
+                                            onResult(PermissionResult.Granted)
+                                        } else {
+                                            updatePermissionState(
+                                                type,
+                                                PermissionState.ServiceDisabled
+                                            )
+                                            showLocationServiceRationale {
+                                                onResult(PermissionResult.ServiceDisabled)
                                             }
                                         }
-                                    )*/
+                                    } else if (hasCoarseLocation) {
+                                        // Fall into the follow-up check for precise
+                                        requestLocationFlow(onResult)
+                                    } else {
+                                        onResult(result)
+                                    }
+                                }
+                            )*/
 
+                                launchMain {
+                                    permissionStore.setState(
+                                        type,
+                                        PermissionState.SystemPromptShown
+                                    )
+                                }
+
+                                onResultCallback = { granted ->
                                     launchMain {
                                         permissionStore.setState(
                                             type,
-                                            PermissionState.SystemPromptShown
+                                            if (granted) PermissionState.Granted else PermissionState.Denied
                                         )
                                     }
-
-                                    onResultCallback = { granted ->
-                                        launchMain {
-                                            permissionStore.setState(
+                                    val result =
+                                        if (granted) PermissionResult.Granted else PermissionResult.Denied
+                                    // Re-check permissions after system prompt
+                                    if (hasFineLocation) {
+                                        if (isLocationServiceEnabled()) {
+                                            updatePermissionState(
                                                 type,
-                                                if (granted) PermissionState.Granted else PermissionState.Denied
+                                                PermissionState.PreciseGranted
                                             )
-                                        }
-                                        val result =
-                                            if (granted) PermissionResult.Granted else PermissionResult.Denied
-                                        // Re-check permissions after system prompt
-                                        if (hasFineLocation) {
-                                            if (isLocationServiceEnabled()) {
-                                                updatePermissionState(
-                                                    type,
-                                                    PermissionState.PreciseGranted
-                                                )
-                                                dialogs.dismiss(specId)
-                                                onResult(PermissionResult.Granted)
+
+                                            specId?.let {
+                                                dialogs.dismiss(it)
+                                            }
+
+                                            onResult(PermissionResult.Granted)
+                                        } else {
+                                            updatePermissionState(
+                                                type,
+                                                PermissionState.ServiceDisabled
+                                            )
+                                            if (uiMode == PermissionUiMode.NoRationales) {
+                                                onResult(PermissionResult.ServiceDisabled)
                                             } else {
-                                                updatePermissionState(
-                                                    type,
-                                                    PermissionState.ServiceDisabled
-                                                )
                                                 showLocationServiceRationale {
-                                                    dialogs.dismiss(specId)
+                                                    specId?.let {
+                                                        dialogs.dismiss(it)
+                                                    }
                                                     onResult(PermissionResult.ServiceDisabled)
                                                 }
                                             }
-                                        } else if (hasCoarseLocation) {
-                                            // Fall into the follow-up check for precise
-                                            requestLocationFlow(onResult)
-                                        } else {
-                                            dialogs.dismiss(specId)
-                                            onResult(result)
                                         }
+                                    } else if (hasCoarseLocation) {
+                                        // Fall into the follow-up check for precise
+                                        requestLocationFlow(uiMode, onResult)
+                                    } else {
+                                        specId?.let {
+                                            dialogs.dismiss(it)
+                                        }
+                                        onResult(result)
                                     }
-
-                                    locationLauncher?.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-
                                 }
-                            },
-                            onCancel = {
-                                launchMain {
-                                    permissionStore.setState(type, PermissionState.Canceled)
-                                }
-                                onResult(PermissionResult.Canceled)
+
+                                locationLauncher?.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                             }
-                        )
+                        }
 
+                        if (uiMode == PermissionUiMode.NoRationales) {
+                            promptSystemForLocation(null)
+                        } else {
+                            showRationaleDialog(
+                                title = "Location Access Needed",
+                                message = "We use your location to show relevant information near you.",
+                                dialogTag = type.toDialogTag(),
+                                onAccept = { specId ->
+                                    promptSystemForLocation(specId)
+                                },
+                                onCancel = {
+                                    launchMain {
+                                        permissionStore.setState(type, PermissionState.Canceled)
+                                    }
+                                    onResult(PermissionResult.Canceled)
+                                }
+                            )
+                        }
                     } else {
                         trackLocationFlow("Location access can not be requested (ie, Either user revoked it or user denied access). Instruct user to open app settings.")
 
@@ -595,10 +724,14 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                             updatePermissionState(type, PermissionState.ManualUpgradeRequested)
                         }
 
-                        showNavigateToSettingsDialog(
-                            title = "Location Permission Required",
-                            message = "Location access could not be requested. Either you've denied it or you have revoked it. Please enable it in system settings."
-                        )
+                        if (uiMode == PermissionUiMode.NoRationales) {
+                            onResult(PermissionResult.Denied)
+                        } else {
+                            showNavigateToSettingsDialog(
+                                title = "Location Permission Required",
+                                message = "Location access could not be requested. Either you've denied it or you have revoked it. Please enable it in system settings."
+                            )
+                        }
                     }
                 }
             }
@@ -608,9 +741,19 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
     override fun requestCombinedLocationAndBluetoothPermissionsFlow(
         onResult: (PermissionResult) -> Unit
     ) {
-        requestLocationFlow { locationResult ->
+        requestCombinedLocationAndBluetoothPermissionsFlow(
+            uiMode = PermissionUiMode.Normal,
+            onResult = onResult
+        )
+    }
+
+    override fun requestCombinedLocationAndBluetoothPermissionsFlow(
+        uiMode: PermissionUiMode,
+        onResult: (PermissionResult) -> Unit
+    ) {
+        requestLocationFlow(uiMode) { locationResult ->
             if (locationResult == PermissionResult.Granted) {
-                requestBluetoothFlow { bluetoothResult ->
+                requestBluetoothFlow(uiMode) { bluetoothResult ->
                     onResult(bluetoothResult)
                 }
             } else {
@@ -659,6 +802,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
         permission: String,
         rationaleMessage: String,
         launcher: ActivityResultLauncher<String>?,
+        uiMode: PermissionUiMode,
         onResult: (PermissionResult) -> Unit
     ) {
         val activity = this.activity ?: return onResult(PermissionResult.Denied)
@@ -668,6 +812,36 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
 
         if (isGranted) {
             grantPermissionByDefault(type, onResult)
+            return
+        }
+
+        val launchPermissionRequest = {
+            if (launcher == null) {
+                trackLocationFlow("Launcher for $permission is null (activity not attached?)")
+                onResult(PermissionResult.Denied)
+            } else {
+                launcher.launch(permission)
+            }
+        }
+
+        // Headless path – skip rationales and handle calls for system prompts only
+        if (uiMode == PermissionUiMode.NoRationales) {
+            launchMain {
+                permissionStore.setState(type, PermissionState.SystemPromptShown)
+            }
+            onResultCallback = { granted ->
+                val (state, result) = if (granted) {
+                    Pair(PermissionState.Granted, PermissionResult.Granted)
+                } else {
+                    Pair(PermissionState.Denied, PermissionResult.Denied)
+                }
+                launchMain {
+                    permissionStore.setState(type, state)
+                }
+                onResult(result)
+            }
+
+            launchPermissionRequest()
             return
         }
 
@@ -701,7 +875,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                         onResult(if (granted) PermissionResult.Granted else PermissionResult.Denied)
                     }
 
-                    launcher?.launch(permission)
+                    launchPermissionRequest()
                 },
                 onCancel = {
                     launchMain {
@@ -725,7 +899,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                 onResult(if (granted) PermissionResult.Granted else PermissionResult.Denied)
             }
 
-            launcher?.launch(permission)
+            launchPermissionRequest()
         }
     }
 
@@ -747,30 +921,6 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
     }
 
     // *** DIALOGS ***
-    private fun showRationaleDialog1(
-        title: String = "Permissions Required",
-        message: String,
-        dialogTag: DialogTags,
-        onAccept: () -> Unit = {},
-        onCancel: () -> Unit = {},
-    ) = launchMain {
-        val res = dialogs.request(
-            CustomSpec(
-                title = title,
-                message = message,
-                positiveText = "Continue",
-                negativeText = "Cancel",
-                /** key for overrides **/
-                tag = dialogTag.tag
-            )
-        )
-        if (res == UiRequestResult.Confirmed) {
-            onAccept()
-        } else {
-            onCancel()
-        }
-    }
-
     private fun showRationaleDialog(
         title: String = "Permissions Required",
         message: String,

@@ -3,6 +3,7 @@ package com.permissions.models
 sealed class PermissionResult {
     data object Granted : PermissionResult()
     data object Denied : PermissionResult()
+    data object PreciseDeniedPermanently : PermissionResult()
 
     // User closed rationale dialog without granting or denying
     data object Canceled : PermissionResult()

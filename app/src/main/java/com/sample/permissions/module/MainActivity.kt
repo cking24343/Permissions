@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import com.permissions.api.PermissionsManager
 import com.permissions.dialogs.PermissionRequestService
 import com.permissions.dialogs.ui.PermissionRequestHost
+import com.permissions.enums.PermissionUiMode
 import com.permissions.models.PermissionResult
 import com.sample.permissions.module.ui.screens.MainScreen
 import com.sample.permissions.module.ui.theme.SamplePermissionsModuleTheme
@@ -120,7 +121,10 @@ class MainActivity : ComponentActivity() {
         }
         launchWhenCreated {
             activityViewModel.requestNotifications.collectLatest {
+                // Example for "Headless" state where we only want to call the permission manager to
+                // handle permission checks and system prompt without rationales.
                 permissionsManager.requestNotificationFlow(
+                    uiMode = PermissionUiMode.NoRationales,
                     onResult = { type ->
                         Timber.tag("PermissionsManager")
                             .d("MainActivity | Request Notification Permission Flow completed, result: $type")
@@ -204,7 +208,9 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding),
                         )
 
-                        // Host permission dialogs
+                        // Mount the Permissions host for overriding default rationales with custom
+                        // ones. You only need to mount if you plan on supporting rationales for
+                        // your permission requests/system prompts.
                         PermissionRequestHost(
                             service = permissionRequestService,
                             registry = uiOverrides,
