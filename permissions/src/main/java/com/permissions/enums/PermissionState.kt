@@ -1,4 +1,4 @@
-package com.permissions.models
+package com.permissions.enums
 
 /**
  * These states will act as an audit log for each permission and help inform UX decisions like:

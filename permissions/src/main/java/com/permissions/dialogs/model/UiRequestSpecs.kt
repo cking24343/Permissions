@@ -2,18 +2,8 @@ package com.permissions.dialogs.model
 
 import kotlinx.coroutines.CompletableDeferred
 import androidx.compose.ui.window.DialogProperties
-
-enum class UiRequestResult {
-    Confirmed,
-    Dismissed,
-}
-
-sealed interface UiRequestSpec {
-    val result: CompletableDeferred<UiRequestResult>
-
-    // used for targeted overrides
-    val tag: String?
-}
+import com.permissions.enums.DismissPolicy
+import com.permissions.enums.UiRequestResult
 
 /** Simple two-button confirm */
 data class ConfirmDialogSpec(
@@ -22,6 +12,8 @@ data class ConfirmDialogSpec(
     val positiveText: String = "Continue",
     val negativeText: String = "Cancel",
     override val tag: String? = null,
+    override val id: String = java.util.UUID.randomUUID().toString(),
+    override val dismissPolicy: DismissPolicy = DismissPolicy.OnResult,
     override val result: CompletableDeferred<UiRequestResult> = CompletableDeferred()
 ) : UiRequestSpec
 
@@ -39,5 +31,7 @@ data class CustomSpec(
     val secondaryImageRes: Int? = null,
     val secondaryImageContentDescription: String? = null,
     override val tag: String? = null,
+    override val id: String = java.util.UUID.randomUUID().toString(),
+    override val dismissPolicy: DismissPolicy = DismissPolicy.OnResult,
     override val result: CompletableDeferred<UiRequestResult> = CompletableDeferred()
 ) : UiRequestSpec

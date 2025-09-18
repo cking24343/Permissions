@@ -1,7 +1,7 @@
 package com.permissions.dialogs.utils
 
-import com.permissions.dialogs.model.DialogTags
-import com.permissions.models.PermissionType
+import com.permissions.enums.DialogTags
+import com.permissions.enums.PermissionType
 
 fun PermissionType.toDialogTag(): DialogTags = when (this) {
     PermissionType.Location -> {

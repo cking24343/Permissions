@@ -1,4 +1,4 @@
-package com.permissions.models
+package com.permissions.enums
 
 enum class PermissionType {
     Location,
