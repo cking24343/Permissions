@@ -1,7 +1,7 @@
 package com.permissions.store
 
-import com.permissions.models.PermissionState
-import com.permissions.models.PermissionType
+import com.permissions.enums.PermissionState
+import com.permissions.enums.PermissionType
 import com.permissions.repository.DataStoreRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow

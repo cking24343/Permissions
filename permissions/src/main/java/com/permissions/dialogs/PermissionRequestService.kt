@@ -1,22 +1,38 @@
 package com.permissions.dialogs
 
 import com.permissions.dialogs.model.ConfirmDialogSpec
-import com.permissions.dialogs.model.UiRequestResult
+import com.permissions.enums.UiRequestResult
 import com.permissions.dialogs.model.UiRequestSpec
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 
 class PermissionRequestService {
-    private val _requests = MutableSharedFlow<UiRequestSpec>(extraBufferCapacity = 1)
-    val requests: SharedFlow<UiRequestSpec> = _requests
+    private val _requests =
+        MutableSharedFlow<Pair<UiRequestSpec, CompletableDeferred<UiRequestResult>>>(
+            extraBufferCapacity = 1
+        )
+    val requests: SharedFlow<Pair<UiRequestSpec, CompletableDeferred<UiRequestResult>>> = _requests
+
+    private val _dismiss = MutableSharedFlow<String>(extraBufferCapacity = 1)
+
+    // emits spec.id to dismiss
+    val dismiss = _dismiss as SharedFlow<String>
 
     suspend fun request(
         spec: UiRequestSpec
-    ): UiRequestResult = withContext(Dispatchers.Main) {
-        _requests.tryEmit(spec)
-        spec.result.await()
+    ): UiRequestResult {
+        val deferred = CompletableDeferred<UiRequestResult>()
+        withContext(Dispatchers.Main) {
+            _requests.tryEmit(spec to deferred)
+        }
+        return deferred.await()
+    }
+
+    fun dismiss(id: String) {
+        _dismiss.tryEmit(id)
     }
 
     suspend fun confirm(

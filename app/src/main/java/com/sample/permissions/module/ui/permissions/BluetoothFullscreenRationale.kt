@@ -37,7 +37,7 @@ import com.sample.permissions.module.R
 
 /** Sample custom rationale without optional UiSpec (ie create our own values for layout) */
 @Composable
-fun LocationFullscreenRationale(
+fun BluetoothFullscreenRationale(
     modifier: Modifier = Modifier,
     spec: CustomSpec? = null,
     logo: @Composable (() -> Unit)? = null,
@@ -45,17 +45,16 @@ fun LocationFullscreenRationale(
     result: (UiRequestResult) -> Unit = {},
 ) {
     val appName = "Your App"
-    val permissionHeader = "Find what matters most, when you need it."
+    val permissionHeader = "Easily connect to nearby devices."
     val sectionTitle = "$appName needs the following permission"
-    val permissionName = "Location"
-    val descriptionIntro = "$appName may use your location data for the following:"
+    val permissionName = "Bluetooth"
+    val descriptionIntro = "$appName may access your device's Bluetooth to detect other nearby devices.\n\n This information will be used for the following:"
     val finePrint = "$appName will never share this information with any 3rd party."
 
     val bulletItems: List<String> = listOf(
-        "Location-appropriate messages",
+        "Connectivity for quick sharing",
         "Suggesting specific data near you",
-        "Calculating distances and routes",
-        "Alerting you when you arrive at a destination, even when the app is closed or not in use",
+        "Alerting you when you when you enter a given proximity",
     )
 
     val blue = Color(0xFF1E88E5)
@@ -205,7 +204,7 @@ private fun BulletList(items: List<String>) {
 @Composable
 private fun SampleLogo() {
     Image(
-        painter = painterResource(R.drawable.ic_sample_logo),
+        painter = painterResource(R.drawable.ic_bluetooth),
         contentDescription = "sample logo",
     )
 }
@@ -213,13 +212,13 @@ private fun SampleLogo() {
 @Composable
 private fun SampleGraphic() {
     Image(
-        painter = painterResource(R.drawable.ic_sample_graphic),
+        painter = painterResource(R.drawable.bluetooth_connect_graphic),
         contentDescription = "sample logo",
     )
 }
 
 @Preview
 @Composable
-fun PreviewLocationFullscreenRationale() {
-    LocationFullscreenRationale()
+fun PreviewBluetoothFullscreenRationale() {
+    BluetoothFullscreenRationale()
 }

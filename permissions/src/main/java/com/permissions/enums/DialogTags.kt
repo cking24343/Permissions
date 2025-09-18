@@ -1,4 +1,4 @@
-package com.permissions.dialogs.model
+package com.permissions.enums
 
 enum class DialogTags(val tag: String) {
     RATIONALE_LOCATION("rationale.location"),

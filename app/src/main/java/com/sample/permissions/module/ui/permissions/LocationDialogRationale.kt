@@ -7,7 +7,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.permissions.dialogs.model.CustomSpec
-import com.permissions.dialogs.model.UiRequestResult
+import com.permissions.enums.UiRequestResult
 
 @Composable
 fun LocationDialogRationale(

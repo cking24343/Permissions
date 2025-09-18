@@ -20,13 +20,13 @@ import androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.permissions.dialogs.model.CustomSpec
-import com.permissions.dialogs.model.UiRequestResult
+import com.permissions.enums.UiRequestResult
 import com.permissions.dialogs.PermissionRequestService
-import com.permissions.dialogs.model.DialogTags
+import com.permissions.enums.DialogTags
 import com.permissions.dialogs.utils.toDialogTag
 import com.permissions.models.PermissionResult
-import com.permissions.models.PermissionState
-import com.permissions.models.PermissionType
+import com.permissions.enums.PermissionState
+import com.permissions.enums.PermissionType
 import com.permissions.store.PermissionStore
 import com.permissions.util.PermissionsInitializer
 import kotlinx.coroutines.CoroutineScope
@@ -491,7 +491,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                             title = "Location Access Needed",
                             message = "We use your location to show relevant information near you.",
                             dialogTag = type.toDialogTag(),
-                            onAccept = {
+                            onAccept = { specId ->
                                 launchMain {
                                     /*handlePermissionRequest(
                                         type = type,
@@ -548,6 +548,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                                                     type,
                                                     PermissionState.PreciseGranted
                                                 )
+                                                dialogs.dismiss(specId)
                                                 onResult(PermissionResult.Granted)
                                             } else {
                                                 updatePermissionState(
@@ -555,6 +556,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                                                     PermissionState.ServiceDisabled
                                                 )
                                                 showLocationServiceRationale {
+                                                    dialogs.dismiss(specId)
                                                     onResult(PermissionResult.ServiceDisabled)
                                                 }
                                             }
@@ -562,6 +564,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                                             // Fall into the follow-up check for precise
                                             requestLocationFlow(onResult)
                                         } else {
+                                            dialogs.dismiss(specId)
                                             onResult(result)
                                         }
                                     }
@@ -682,7 +685,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
             showRationaleDialog(
                 message = rationaleMessage,
                 dialogTag = type.toDialogTag(),
-                onAccept = {
+                onAccept = { specId ->
                     launchMain {
                         permissionStore.setState(type, PermissionState.SystemPromptShown)
                     }
@@ -694,6 +697,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
                                 if (granted) PermissionState.Granted else PermissionState.Denied
                             )
                         }
+                        dialogs.dismiss(specId)
                         onResult(if (granted) PermissionResult.Granted else PermissionResult.Denied)
                     }
 
@@ -743,7 +747,7 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
     }
 
     // *** DIALOGS ***
-    private fun showRationaleDialog(
+    private fun showRationaleDialog1(
         title: String = "Permissions Required",
         message: String,
         dialogTag: DialogTags,
@@ -762,6 +766,28 @@ class PermissionsManagerImpl : PermissionsManager, KoinComponent {
         )
         if (res == UiRequestResult.Confirmed) {
             onAccept()
+        } else {
+            onCancel()
+        }
+    }
+
+    private fun showRationaleDialog(
+        title: String = "Permissions Required",
+        message: String,
+        dialogTag: DialogTags,
+        onAccept: (specId: String) -> Unit = {},
+        onCancel: () -> Unit = {},
+    ) = launchMain {
+        val spec = CustomSpec(
+            title = title,
+            message = message,
+            positiveText = "Continue",
+            negativeText = "Cancel",
+            tag = dialogTag.tag
+        )
+        val res = dialogs.request(spec)
+        if (res == UiRequestResult.Confirmed) {
+            onAccept(spec.id)       // <— give caller the spec id
         } else {
             onCancel()
         }
